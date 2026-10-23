@@ -24,8 +24,6 @@ security_attack2/
 │   ├── load-cmdb.sh        # CMDB 風データ投入（AI Agent / RAG 検証用、攻撃シナリオとは独立）
 │   ├── opnsense-nano-configured.vhd  # 設定済み OPNsense VHD（正式版。git 管理外・手元で保管）
 │   └── .env.example        # 機密変数の雛形
-├── terraform-legacy/   # 旧・本番デモ環境（RG contoso-seclab）。destroy 済み・参照用のみ。使わない
-├── terraform-opnsense-only/  # OPNsense だけを立てるトラブルシュート用（別 state / 別 RG）
 └── README.md
 ```
 
@@ -114,13 +112,6 @@ qemu-img convert -f raw -o subformat=fixed,force_size -O vpc \
 6. **LAN の IP（10.10.2.4/24）が入っているか**を、設定前の VHD ではなく、保存した VHD で `./deploy.sh <VHD>` を実行して確かめる（OPNsense で何も設定せずに `ifconfig hn1` が 10.10.2.4、Squid から `curl -sI http://example.com` が 200 になること）。確認できたら正式版（`opnsense-nano-configured.vhd`）に差し替える。
 - スナップショットの SAS 経由でダウンロードしたファイルは、そのまま VHD になっている（末尾に `conectix` のフッター、8,589,935,104 バイト）。`qemu-img convert` は不要。
 - SAS の有効期限（`--duration-in-seconds`）は、8 GB を 1 分約 37 MB で落とす時間（約 4 時間）を見込んで 14400 以上にする。切れたら `revoke-access` → `grant-access` で再発行し、同じファイルに `curl -C -` で追記する。
-
-### OPNsense 単体のトラブルシュート環境（`terraform-opnsense-only/`）
-- NAT Gateway は付いていない（メイン構成の `network.tf` にだけある）。インターネットへの出口の確認はメイン環境で行う。
-- OPNsense だけを別 state・別 RG（`contoso-opnsense-debug`、VNet 10.10.0.0/16）で立てる。本番と同じ `./deploy.sh [VHD]` で動く。使い方は同ディレクトリの README.md。
-- Bastion の `--target-ip-address`（IP 接続）トンネルは **22/3389 以外のポートを使えない**（`Custom ports are not allowed`）。GUI(443) は `--target-resource-id <VM の ID>` のトンネルで張る。IP 接続でしか届かない先は、SSH で LAN 側 IP(10.10.2.4:22) に入って `ssh -L` で転送する。
-- シリアルコンソールは `root` / `opnsense`。ファイアウォールで GUI に入れなくなったら `pfctl -d`（再起動か、ルールの Apply で元に戻る）。
-- 課金が続くので、使い終えたら `terraform destroy`。先に Snapshot を消す（RG の削除が失敗する）。
 
 ### 運用上の注意
 - OPNsense の設定（LAN の IP など）は OS ディスクにあるので、**`opnsense-osdisk` が作り直されると VHD の状態に戻る**（Import 元の VHD の設定に戻る）。`terraform apply` の前に `terraform plan` で、`opnsense` の VM やディスクが replace / destroy になっていないか確認する。コンソールで設定を変えたら、VHD に取り直さない限りその場限りになる。
